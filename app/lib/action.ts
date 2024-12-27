@@ -2,6 +2,9 @@
 
 import { z } from 'zod'
 import { sql } from '@vercel/postgres';
+import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
+
 
 const FormSchema = z.object({
     id: z.string(),
@@ -10,8 +13,8 @@ const FormSchema = z.object({
     status: z.enum(['pending', 'paid']),
     date: z.string(),
 })
-
 const CreateInvoice = FormSchema.omit({id: true, date: true});
+const UpdateInvoice = FormSchema.omit({ id: true, date: true });
 
 export async function createInvoice(formData: FormData){
     const { customerId, amount, status } = CreateInvoice.parse({
@@ -27,5 +30,27 @@ export async function createInvoice(formData: FormData){
       VALUES (${customerId}, ${amountInCents}, ${status}, ${date})
     `;
 
+    revalidatePath('/dashboard/invoices');
+    redirect('/dashboard/invoices');
 // console.log(typeof rawFormData.amount)
 }
+
+
+export async function updateInvoice(id: string, formData: FormData) {
+    const { customerId, amount, status } = UpdateInvoice.parse({
+      customerId: formData.get('customerId'),
+      amount: formData.get('amount'),
+      status: formData.get('status'),
+    });
+   
+    const amountInCents = amount * 100;
+   
+    await sql`
+      UPDATE invoices
+      SET customer_id = ${customerId}, amount = ${amountInCents}, status = ${status}
+      WHERE id = ${id}
+    `;
+   
+    revalidatePath('/dashboard/invoices');
+    redirect('/dashboard/invoices');
+  }
